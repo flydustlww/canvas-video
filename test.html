@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta content="yes" name="apple-mobile-web-app-capable">
+    <meta name="viewport" content="width=device-width,height=device-height,inital-scale=1.0,maximum-scale=1.0,user-scalable=no;">
+    <title>视频制作工具demo</title>
+    <script src="js/vue.js"></script>
+    <script src="js/jquery.js"></script>
+    <script src="js/jiugongge.js"></script>
+    <script src="js/helloworld.js"></script>
+    <!-- <script src="js/selectFromVideoStroes.js"></script> -->
+    <link rel="stylesheet" type="text/css" href="jquery.imgplay.css">
+
+</head>
+<body>
+<div id="app">
+<!--     <video style="
+    z-index: 9000;
+"><source src="http://gz.bcebos.com/ubmc-sandbox/media/v1/0f000Zj7V0emkBFJirPKl6.mp4" type="video/mp4"></video> -->
+    <button id ="button" v-on:click="showVideoTool">使用视频工具制作</button>
+    <button id ="button" v-on:click="addVideo">上传视频</button>
+    <button id ="button" v-on:click="selectHavenVideos">从视频库中选择</button>
+    <helloworld v-show="isShowVideoTool"></helloworld>
+<!--     <div class="select-from-video-stroes">
+        <div class="poplayer-header">视频库</div>
+        <div class="poplayer-body">
+            <div class="poplayer-body-title">已有视频:</div>
+            <div class="video-stroes-wrapper">
+                <div class="video-stroes-video" @click="selectVideo">
+                    <video class="video-source" >
+                        <source src="http://gz.bcebos.com/ubmc-sandbox/media/v1/0f000Zj7V0emkBFJirPKl6.mp4" type="video/mp4" >             
+                    </video>
+                    <div class="video-name-duration">
+                        dsds
+                    </div>
+                    <div class="selected-trangle" v-show="selected">V</div>
+                </div>        
+            </div>
+
+        </div>
+        <div class="video-stroes-footer">
+            <div class="video-stroes-select-button">选择</div>
+            <div class="video-stroes-cancel-button">取消</div>
+        </div>
+    </div> -->
+    <div class="upload-progress" v-show="uploadLayer">
+        <div class="upload-progress-trangle"></div>
+        <div class="video-uploading-video-wrapper">
+            <div class="video-uploading-video">
+                <img v-if="posterSrc" :src="posterSrc" alt="">
+                <div v-if="uploading" class="progress-bar">
+                    <section class=""></section>        
+                </div>
+                <div v-show="uploadAgain" class="uploading-error">错误！</div>
+                <div v-if="uploading" class="cancel-uploading" ><span v-show = "!uploadAgain">取消</span><span v-show = "uploadAgain">重试</span></div>
+                
+            </div>
+            <div class="video-info">
+                <div class="video-name">{{videoName}}</div>
+                <div class="video-dur-size">时长 {{duration}}，大小 {{size}}</div>
+            </div>
+            <div class="preview-video-remove" v-if="!uploading">
+                <div class="preview-button" @click="previewVideo">预览</div><div class="remove-button" @click="removeVideo">移除</div>
+            </div>
+        </div>
+        <div class="video-uplading-poster-wrapper">
+            <div class="video-uploading-poster">
+                <div class="video-poster-h1">视频封面：</div>
+                <section v-for="(file, index) of files">
+                    <img :src="file.src" alt="" class="add-poster">
+                </section>
+                <section v-if="files.length === 0">
+                    <div class="add-poster" @click="addPoster"><span>+</span></div>
+                </section>
+                <input type="file" accept="image/*" @change="fileAdd" ref="file" multiple="multiple">
+            </div>
+            <div class="video-upload-poster-tips">尺寸为90*90, 960*640，大小不超过200k，只支持jpg、png格式。</div>
+            <div class="preview-poster-remove" v-if="files.length !== 0">
+                <div class="preview-button" @click="previewPoster">预览</div><div class="remove-button" @click="removePoster">移除</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="preview-poster" v-show="isPrevewPoster">
+        <section v-for="(file, index) of files" class="privewPoster-image">
+            <img :src="file.src" alt="" class="privewPoster-image">
+        </section>
+        <div class="preview-poster-close" @click="closePreviewPoster">X</div>
+    </div>
+
+    <div class="preview-video" v-show="isPreviewVideo">
+        <video>
+            <source :src="videoSrc" type="video/mp4" >
+        </video>
+        <div class="preview-video-close" @click="closePreviewVideo">X</div>
+    </div>
+
+    <form name="submitVideo" id="submitVideo" >
+        <input type="text" name="planId" value="3834" />
+        <input type="text" name="groupId" value="15792" />
+        <input type="text" name="unitId" value="0" />
+        <input type="text" name="unitType" value="VIDEO_WITH_IMAGE" />
+        <input type="text" name="uploadType" value="VIDEO_CPM" /> 
+        <input type="file" name="upload" @change="uploadVideo" ref="videofile" >
+    </form>
+
+    <div class="canvasVideo-upload-tip">宽高比16:9,支持尺寸为640*360,大小须在20MB以内;支持MP4格式, h.264制式。</div>
+</div>
+
+</body>
+<script>
+Bus = new Vue();
+new Vue({
+    el:'#app',
+
+    data : function () {
+        return {
+            isShowVideoTool: false,
+            uploadLayer: true,
+            uploadAgain: false,
+            posterSrc: '',
+            videoSrc: 'http://gz.bcebos.com/ubmc-sandbox/media/v1/0f000Zj7V0emkBFJirPKl6.mp4',
+            percent: 0,
+            uploading: false,
+            duration: '30s',
+            size: '14.5M',
+            videoName: '',
+            files: [],
+            videos: [],
+            formSrc: '/user/upload.json',
+
+            isPrevewPoster: false,
+            isPreviewVideo: false,
+            selected: false
+        }
+    },
+    components: {
+        'helloworld': helloworld
+    },
+    created() {
+        var me = this;
+        Bus.$on('fillFileInfo', function (data) {
+
+            me.size = data.fileSize;
+            me.videoName = data.fileName;
+            me.duration = data.duration;
+            me.videoSrc = data.videoSrc;
+        });
+
+        Bus.$on('finishedUpload', function (data) {
+            me.uploadLayer = true;
+            me.isShowVideoTool = false;
+            
+            // 上传失败
+            if (data.percentComplete === 1) {
+                console.log('上传完毕');
+                me.uploading = false;
+                me.posterSrc = data.posterSrc
+            }
+            else {
+                me.uploading = true;
+                me.percent = data.percentComplete; 
+                $('.progress-bar section').css('width', (me.percent * 100) + '%')
+                console.log('me.percent======' + me.percent)
+            }
+            
+        });
+        Bus.$on('errorUpload', function (data) {
+            console.log('上传失败');
+            me.uploadAgain = true;
+            me.uploading = false;
+
+        })
+
+    },
+    methods: {
+        closePreviewPoster: function  () {
+            this.privewPoster = false;
+            $('#app').css('position', 'unset');
+            $('#app').css('background-color', '#fff');
+        },
+        closePreviewVideo: function () {
+            this.privewVideo = false;
+            $('#app').css('position', 'unset');
+            $('#app').css('background-color', '#fff');
+        },
+        previewPoster: function  () {
+            $('#app').css('background-color', 'rgba(0,0,0,0.20)');
+            $('#app').css('position', 'relative');
+            this.privewPoster = true;
+        },
+        previewVideo: function () {
+            $('#app').css('background-color', 'rgba(0,0,0,0.20)');
+            $('#app').css('position', 'relative');
+            this.isPreviewVideo = true;
+        },
+        addPoster: function () {
+            this.$refs.file.click();
+        },
+        fileAdd: function () {
+            var list = this.$refs.file.files
+            for (var i = 0; i < list.length; i++) {
+                    var item = {
+                        name: list[i].name,
+                        size: list[i].size,
+                        file: list[i]
+                    }
+                    this.html5Reader(list[i], item)
+                    this.files.push(item);
+                
+            }
+            this.$refs.file.value = ''
+        },
+        // 将图片文件转成BASE64格式
+        html5Reader: function (file, item) {
+            const reader = new FileReader()
+            reader.onload = (e) => {
+                this.$set(item, 'src', e.target.result)
+            }
+            reader.readAsDataURL(file)
+        },
+        removePoster: function (index) {
+            this.files.splice(index, 1);
+        },
+        removeVideo: function (index) {
+
+        },
+        // 上传视频
+        addVideo: function () {
+            // this.uploadLayer = true;
+            // $('.upload-progress-trangle').css('left', '138px');
+            this.$refs.videofile.click();
+        },
+        uploadVideo: function () {
+            var list = this.$refs.videofile.files
+            for (var i = 0; i < list.length; i++) {
+                var item = {
+                    name: list[i].name,
+                    size: list[i].size,
+                    file: list[i]
+                }
+            this.videos.push(item);
+                
+            }
+            if(this.videos.length === 0) {
+                alert('上传失败！请重新上传')
+
+            }
+            else {
+                this.ajaxUpload(this.videos);
+            }
+            this.$refs.videofile.value = ''
+        },
+        ajaxUpload: function (data) {
+
+            var form = document.getElementById("submitVideo");
+            var formData =new FormData(form);
+
+           $.ajax({
+                url: this.formSrc,
+                type: "POST",
+                data: formData,
+                timeout: 1500,
+                processData: false,  // 告诉jQuery不要去处理发送的数据
+                contentType: false,   // 告诉jQuery不要去设置Content-Type请求头
+                success: function(response,status,xhr){
+                   console.log(xhr);
+                   var json = $.parseJSON(response);
+                   console.log(json);
+                },
+                error: function(response,status,xhr) {
+                    console.log(response + status +xhr);
+
+                }
+           });
+           return false;
+
+        },
+        selectHavenVideos: function () {
+
+        },
+        // 视频库中勾选
+        selectVideo: function (evt) {
+            this.selected = true;
+            console.log('evt:::' + evt.target);
+            $(evt.currentTarget).css('border', '3px solid #3998FC');
+            // $('')
+
+        },
+        showVideoTool() {
+            this.isShowVideoTool = true 
+            // // 插入mask元素
+            // $('body').css('position', 'relative');
+            // $('body').append('<div class="mask" id="mask"><helloworld></helloworld></div>');
+            // $('.upload-progress-trangle').css('left', '34px');
+            // new Vue({
+            //     el: '#mask',
+            //     components: {
+            //         'helloworld': helloworld
+            //     }
+
+            // })
+
+        }
+    }
+});
+
+</script>
+<style>
+/* 从视频库中选择 */
+/*.selected-trangle-wrapper {
+    width: 24px;
+    height: 24px;
+    background: #3998FC;
+    position: relative;
+}*/
+.selected-trangle {
+    text-align: center;
+    color: #fff;
+    position: absolute;
+    right: 0px;
+    top: 0px;
+    width: 24px;
+    height: 24px;
+    background: #3998FC;
+
+}
+.video-name-duration {
+    width: 100%;
+    height: 28px;
+    color: #fff;
+    background-color: #000;
+    line-height: 28px;
+    position: absolute;
+    bottom: 0px;
+}
+.select-from-video-stroes {
+    width: 1000px;
+    /*height: 600px;*/
+    border: 1px solid #000;
+}
+.video-stroes-wrapper {
+    margin-top: 28px;
+    max-height: 396px;
+    overflow-y: scroll; 
+}
+.video-stroes-video {
+    width: 210px;
+    height: 118px;
+    margin-right: 20px;
+    position: relative;
+    
+}
+.video-source {
+    width: 210px;
+    height: 118px;
+    object-fit: fill;
+}
+.video-stroes-footer {
+    height: 76px;
+    border-top: 1px solid #E8E8E8;
+    position: relative;
+}
+.video-stroes-select-button {
+    position: absolute;
+    right: 125px;
+    bottom: 20px;
+    background: #3998FC;
+    border: 1px solid #DBDBDB;
+    width: 65px;
+    height: 36px;
+    text-align: center;
+    line-height: 36px;
+    font-size: 14px;
+    color: #FFFFFF;
+
+}
+.video-stroes-cancel-button {
+    position: absolute;
+    right: 30px;
+    bottom: 20px;
+    background: #FFFFFF;
+    border: 1px solid #DBDBDB;
+    width: 65px;
+    height: 36px;
+    text-align: center;
+    line-height: 36px;
+    font-size: 14px;
+    color: #666666;
+}
+/**/
+.preview-video {
+    width: 700px;
+    height: 420px;
+    padding: 30px;
+    background-color: #fff;
+    position: absolute;
+    top: 50px;
+    left: 25%;
+    padding: 30px;
+    z-index: 100;
+    box-shadow: 0 0 12px 0 rgba(0,0,0,0.20);
+
+}
+.preview-video video {
+    width: 100%;
+    height: 100%;
+}
+.preview-video-remove {
+    position: absolute;
+        bottom: 47px;
+        left: 200px;
+        display: inline-block
+}
+.uploading-error {
+    font-size: 14px;
+    color: #FF5B5B;
+    line-height: 14px;
+}
+.cancel-uploading {
+    position: absolute;
+    top: 43px;
+    left: 46px;
+    width: 70px;
+    height: 28px;
+    border:  1px solid #DBDBDB;
+    line-height: 28px;
+    font-size: 12px;
+    text-align: center;
+    color: #fff;
+}
+.preview-poster-remove {
+    position: absolute;
+    bottom: 25px;
+    display: inline-block;
+    left: 125px;
+}
+.preview-button,.remove-button {
+    font-size: 14px;
+    color: #3998FC;
+    display: inline-block;
+    margin-right: 15px;
+    cursor: pointer;
+}
+.preview-poster {
+    position: absolute;
+    top: 50px;
+    left: 25%;
+    width: 453px;
+    height: 415px;
+    padding: 30px;
+    background-color: #fff;
+    z-index: 100;
+    box-shadow: 0 0 12px 0 rgba(0,0,0,0.20);
+}
+.preview-poster-close,.preview-video-close {
+    position: absolute;
+    top: 7px;
+    right: 12px;
+    color: #333;
+    cursor: pointer;
+}
+.privewPoster-image {
+    width: 100%;
+    height: 100%;
+}
+.video-upload-poster-tips {
+    width: 300px;
+    height: 40px;
+    font-size: 14px;
+    color: #999999;
+    display: inline-block;
+    position: absolute;
+    top: 30px;
+
+}
+.video-poster-h1 {
+    font-size: 14px;
+    color: #666666;
+    line-height: 28px;
+}
+.video-uploading-poster {
+    height: 145px;
+    width: 90px;
+    margin-right: 17px;
+    display: inline-block;
+}
+.video-uplading-poster-wrapper {
+    padding-left: 20px;
+    position: relative;
+}
+.video-uploading-poster input {
+    display: none;
+}
+.add-poster {
+    width: 90px;
+    height: 90px;
+    background: #FFFFFF;
+    border: 1px solid #DBDBDB;
+}
+.add-poster span {
+    color: #666;
+    width: 90px;
+    height: 90px;
+    float: left;
+    text-align: center;
+    line-height: 90px;
+    border: 1px solid #dbdbdb;
+    font-size: 30px;
+    cursor: pointer;
+}
+.canvasVideo-upload-tip {
+    width: 384px;
+    height: 40px;
+    margin-top: 15px;
+    font-size: 14px;
+    color: #999999;
+}
+.video-uploading-video-wrapper {
+    position: relative;
+    padding: 37px 0 42px 20px;
+}
+.video-uploading-video {
+    position: relative;
+    width: 160px;
+    height: 90px;
+    background-color: #000;
+    display: inline-block;
+    margin-right: 22px;
+}
+.video-uploading-video img{
+    width: 100%;
+    height: 100%;
+}
+.video-info {
+    position: absolute;
+    left: 200px;
+    top: 0px;
+    width: 180px;
+    margin-top: 40px;
+    
+}
+.video-name {
+    font-size: 14px;
+    color: #666666;
+}
+.video-dur-size {
+    font-size: 14px;
+    color: #999999;
+}
+.upload-progress {
+    width: 741px;
+    min-height: 155px;
+    background: #ECF0F6;
+    position: relative;
+        margin-top: 15px;
+}
+.upload-progress-trangle {
+   width: 0;
+   height: 0;
+   border-right: 8px solid transparent;
+   border-bottom: 10px solid #ECF0F6;
+   border-left: 8px solid transparent;
+   
+   position: absolute;
+   top: -10px;
+   left: 34px;    
+  
+}
+body{
+    width: 100%;
+    height: 2000px;
+}
+.mask {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+    top: 0;
+    left: 0;
+}
+.error-tip {
+    text-align: center;
+    line-height: 42px;
+    position: absolute;
+    top: 272px;
+    left: 38%;
+    width: 500px;
+    height: 42px;
+    box-shadow: 0 1px 4px 0 rgba(0,0,0,0.20);
+    border-radius: 1px;
+    font-size: 14px;
+    color: #666666;
+}
+.error-tip:before {
+    content: '';
+    background: url(images/提示@2x.png) no-repeat;
+    position: absolute;
+    top: 13px;
+    left: 160px;
+    width: 16px;
+    height: 16px;
+    background-size: 100% 100%;
+}
+.poplayer-header {
+    height: 22px;
+    background-color: #3462C1;
+    font-size: 14px;
+    color: #FFFFFF;
+    padding: 8px 15px;
+}
+.poplayer-body {
+    background-color: #fff;
+    padding: 30px 0px 0 30px;
+    overflow: hidden;
+}
+.poplayer-body-right {
+    width: 374px;
+    float: right;
+    border-left: 1px solid #E7E7E7;
+}
+.poplayer-body-left {
+    float: left;
+}
+.select-style {
+    margin-top: 38px;
+}
+.upload-image-wrapper {
+    max-height: 151px;
+    max-width: 580px;
+    overflow-y: scroll;
+}
+.select-pic-title,.select-style-title {
+    font-size: 14px;
+    color: #333333;
+    line-height: 14px;
+}
+.select-pic-subtitle,.select-style-subtitle,.select-music-subtitle {
+    font-size: 14px;
+    color: #999999;
+    width: 594px;
+    margin: 12px 0 23px;
+/*    max-height: 72px;
+    overflow-y: scroll;*/
+}
+.select-music-item {
+    margin-top: 16px;
+}
+.none-music-item,.style-item {
+    margin-right: 17px;
+}
+.music-item {
+    margin-right: 31px;
+}
+.music-item:after{
+    content: '';
+    background: url(images/音乐@2x.png) no-repeat;
+    background-size: 100% 100%;
+    position: absolute;
+    width: 9px;
+    height: 11px;
+    left: 60px;
+
+}
+.vue-uploader {
+    /*border: 1px solid #e5e5e5;*/
+}
+.vue-uploader .file-list {
+    padding: 10px 0px;
+}
+.vue-uploader .file-list:after {
+    content: '';
+    display: block;
+    clear: both;
+    visibility: hidden;
+    line-height: 0;
+    height: 0;
+    font-size: 0;
+}
+.vue-uploader .file-list .file-item {
+    float: left;
+    position: relative;
+    width: 100px;
+    text-align: center;
+}
+.vue-uploader .file-list .file-item img{
+    width: 80px;
+    height: 80px;
+    border: 1px solid #ececec;
+}
+.vue-uploader .file-list .file-item .file-remove {
+    position: absolute;
+    right: 12px;
+    /*display: none;*/
+    top: 4px;
+    width: 14px;
+    height: 14px;
+    color: white;
+    cursor: pointer;
+    line-height: 12px;
+    border-radius: 100%;
+    transform: rotate(45deg);
+    background: rgba(0, 0, 0, 0.5);
+}
+.vue-uploader .file-list .file-item:hover .file-remove {
+    display: inline;
+}
+.vue-uploader .file-list .file-item .file-name {
+    margin: 0;
+    height: 40px;
+    word-break: break-all;
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+.vue-uploader .add {
+    width: 80px;
+    height: 80px;
+    margin-left: 10px;
+    float: left;
+    text-align: center;
+    line-height: 80px;
+    border: 1px solid #dbdbdb;
+    font-size: 30px;
+    cursor: pointer;
+}
+.add span {
+    color: #666;
+}
+.upload-func {
+    background: #fff;
+    display: flex;
+    height: 76px;
+    border-top: 1px solid #ececec;
+    width: 100%;
+    position: relative;
+}
+.progress-bar {
+    height: 4px;
+    top: 25px;
+    left: 45px;
+    width: 70px;
+    position: absolute;
+    background: rgba(255,255,255,0.30);
+}
+.progress-bar section {
+    background: #fff;
+    height: 4px;
+    color: #fff;
+ 
+    transition: all .5s ease;
+}
+.upload-func .operation-box {
+    position: absolute;
+    right: 30px;
+    height: 76px;
+    line-height: 76px;
+}
+.upload-func .operation-box .genVideo {
+    color: #fff;
+    background: #3998FC;
+    border: none;
+    cursor: pointer;
+    width: 100px;
+    height: 36px;
+    line-height: 36px;
+    margin-right: 30px;
+
+}
+.upload-func .operation-box .cancel {
+    color: #666;
+    border: 1px solid #DBDBDB;
+    cursor: pointer;
+    width: 65px;
+    height: 36px;
+    line-height: 36px;
+
+}
+.vue-uploader > input[type="file"] {
+    display: none;
+}
+</style>
+</html>
